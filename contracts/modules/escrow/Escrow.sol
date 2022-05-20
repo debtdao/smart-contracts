@@ -70,19 +70,50 @@ contract Escrow is IEscrow {
     * @returns - the collateral's USD value
     */
     function _getCollateralValue() internal returns(uint) {
+        int collateralValue = 0;
+        for(uint i = 0; i < _tokensUsedAsCollateral.length; i++) {
+            address token = _tokensUsedAsCollateral[i];
+            uint deposit = deposited[token];
+            if(deposit != 0) {
+                int price = IOracle(oracle).getLatestAnswer(token);
+                // need to scale value by token decimal
+                (bool success, bytes memory result) = token.call(abi.encodeWithSignature("decimals()"));
+                if(!success) {
+                  int val = price < 0 ?
+                      (uint256(-price) * deposit) / 1e18 : 
+                      (uint256(price) * deposit) / 1e18;
+                   collateralValue += val;
+                } else {
+                    uint8 decimals = abi.decode(result, (uint8));
+                    collateralValue += price < 0 ?
+                        (uint256(-price) * deposit) / (1 * 10 ** decimals) : 
+                        (uint256(price) * deposit) / (1 * 10 ** decimals);
+                }
+                
+            }
+        }
+
+        collateralValue = collateralValue < int(0) ? int(0) : collateralValue;
+
+        return uint(collateralValue);
+    }
+
+    function _getCollateralValue() internal returns(uint) {
         uint collateralValue = 0;
         for(uint i = 0; i < _tokensUsedAsCollateral.length; i++) {
             address token = _tokensUsedAsCollateral[i];
             uint deposit = deposited[token];
             if(deposit != 0) {
-                uint price = IOracle(oracle).getLatestAnswer(token);
+                int price = IOracle(oracle).getLatestAnswer(token);
                 // need to scale value by token decimal
-                (bool success, bytes memory result) = token.call(abi.encodeWithSignature("decimals()"));
-                if(!success) {
-                    collateralValue += (price * deposit) / 1e18;
+                uint8 decimals = _getTokenDecimals(token);
+                if(price < 0) {
+                    // if negative price, get absolute value then subtract
+                    uint negValue = (uint256(-price) * deposit) / (1 * 10 ** decimals);
+                    // prevent underflow revert and floor value at 0
+                    collateralValue = negValue > collateralValue ? 0 : collateralValue - negValue;
                 } else {
-                    uint8 decimals = abi.decode(result, (uint8));
-                    collateralValue += (price * deposit) / (1 * 10 ** decimals);
+                    collateralValue += (uint256(price) * deposit) / (1 * 10 ** decimals);
                 }
             }
         }
@@ -90,6 +121,14 @@ contract Escrow is IEscrow {
         return collateralValue;
     }
 
+    function _getTokenDecimals(address token) internal returns(uint8) {
+       (bool success, bytes memory result) = token.call(abi.encodeWithSignature("decimals()"));
+        if(!success) {
+            return uint8(18); // default to standard erc20 18 decimals
+        } else {
+            return abi.decode(result, (uint8));
+        }
+    }
     /*
     * @dev see IEscrow.sol
     */
