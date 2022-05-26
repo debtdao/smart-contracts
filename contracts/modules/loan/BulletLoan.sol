@@ -33,7 +33,7 @@ abstract contract BulletLoan is TermLoan {
     // must already _accrueInterest in depositAndRepay/_getMissedPayments
     totalOwed = isEnd ? 
       // loan has ended. repay all principal + interest
-      initialPrincipal + debts[positionId].interestAccrued + overduePaymentsAmount :
+      terms[positionId].initialPrincipal + debts[positionId].interestAccrued + overduePaymentsAmount :
       // normal interest payment
       debts[positionId].interestAccrued + overduePaymentsAmount;
 

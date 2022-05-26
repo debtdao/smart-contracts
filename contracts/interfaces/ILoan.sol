@@ -6,6 +6,7 @@ interface ILoan {
     address lender;           // person to repay
     address token;            // token being lent out
     uint8 decimals;           // token's decimals for adjusting price / amounts
+    bool init;                // if lender made deposit yet
     // all denominated in token, not USD
     uint256 deposit;          // total liquidity provided by lender for token
     uint256 principal;        // amount actively lent out

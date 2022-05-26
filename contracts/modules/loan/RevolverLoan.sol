@@ -3,8 +3,6 @@ import { LoanLib } from "../../utils/LoanLib.sol";
 import { BaseLoan } from "./BaseLoan.sol";
 
 contract RevolverLoan is BaseLoan {
-  bytes32[] public positionIds; // all active positions
-
   constructor(
     uint256 maxDebtValue_,
     address oracle_,
@@ -20,48 +18,39 @@ contract RevolverLoan is BaseLoan {
   ) {
 
   }
-  /**
-   * @dev - Loan borrower and proposed lender agree on terms
-            and add it to potential options for borrower to drawdown on
-            Lender and borrower must both call function for MutualUpgrade to add debt position to Loan
-   * @param amount - amount of `token` to initially deposit
-   * @param token - the token to be lent out
-   * @param lender - address that will manage debt position 
-  */
-  function addDebtPosition(
-    uint256 amount,
-    address token,
-    address lender
-  )
-    isActive
-    mutualUpgrade(lender, borrower) 
-    virtual
-    override
-    external
-    returns(bool)
-  {
-    bool success = IERC20(token).transferFrom(
-      lender,
-      address(this),
-      amount
-    );
-    require(success, 'Loan: no tokens to lend');
 
-    bytes32 id = _createDebtPosition(lender, token, amount, 0);
 
-    positionIds.push(id);
+  function init() onlyBorrower external returns(bool) {
+    uint256 startingPrincipal = 0;
+    uint256 length = positionIds.length;
+    DebtPosition memory debt;
+    
+    for(uint256 i = 0; i < length; i++) {
+      bytes32 id = positionIds[i];
+      debt = debts[id];
+      bool success = IERC20(debt.token).transferFrom(debt.lender, address(this), debt.deposit);
+      if(!success) {
+        // lender can not make payment. remove from loan
+        _close(id);
+      } else {
+        debt.init = true;
+      }
+    }
+    
+    // save global usd principal value
+    principal = startingPrincipal;
 
     return true;
   }
 
-  /**
+    /**
     @notice see _accrueInterest()
   */
   function accrueInterest() override external returns(uint256 accruedValue) {
     uint256 len = positionIds.length;
 
     for(uint256 i = 0; i < len; i++) {
-      (, uint256 accruedTokenValue) = _accrueInterest(positionIds[len]);
+      (, uint256 accruedTokenValue) = _accrueInterest(positionIds[i]);
       accruedValue += accruedTokenValue;
     }
 

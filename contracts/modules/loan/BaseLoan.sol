@@ -1,7 +1,6 @@
 pragma solidity ^0.8.9;
 
 // Helpers
-import { MutualUpgrade } from "../../utils/MutualUpgrade.sol";
 import { LoanLib } from "../../utils/LoanLib.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
@@ -10,7 +9,7 @@ import { ILoan } from "../../interfaces/ILoan.sol";
 import { IEscrow } from "../../interfaces/IEscrow.sol";
 import { IOracle } from "../../interfaces/IOracle.sol";
 
-abstract contract BaseLoan is ILoan, MutualUpgrade {  
+abstract contract BaseLoan is ILoan {  
   address immutable public borrower;   // borrower being lent to
   address immutable public oracle; 
   address immutable public arbiter;
@@ -20,6 +19,8 @@ abstract contract BaseLoan is ILoan, MutualUpgrade {
 
   // Loan Financials aggregated accross all existing  DebtPositions
   LoanLib.STATUS public loanStatus;
+
+  bytes32[] public positionIds; // all active positions
 
   // all deonminated in USD
   uint256 public principal; // initial loan  drawdown
@@ -32,7 +33,6 @@ abstract contract BaseLoan is ILoan, MutualUpgrade {
   /**
    * @dev - Loan borrower and proposed lender agree on terms
             and add it to potential options for borrower to drawdown on
-            Lender and borrower must both call function for MutualUpgrade to add debt position to Loan
    * @param maxDebtValue_ - total debt accross all lenders that borrower is allowed to create
    * @param oracle_ - price oracle to use for getting all token values
    * @param arbiter_ - neutral party with some special priviliges on behalf of borrower and lender
@@ -172,8 +172,6 @@ abstract contract BaseLoan is ILoan, MutualUpgrade {
     return principal + totalInterestAccrued;
   }
 
-
-
   // Liquidation
   /**
    * @notice - Forcefully take collateral from borrower and repay debt for lender
@@ -200,6 +198,18 @@ abstract contract BaseLoan is ILoan, MutualUpgrade {
   }
 
 
+  /**
+    @notice see _accrueInterest()
+  */
+  function accrueInterest() virtual override external returns(uint256 accruedValue) {
+    uint256 len = positionIds.length;
+
+    for(uint256 i = 0; i < len; i++) {
+      (, uint256 accruedTokenValue) = _accrueInterest(positionIds[i]);
+      accruedValue += accruedTokenValue;
+    }
+
+  }
   ///////////////
   // REPAYMENT //
   ///////////////
@@ -418,8 +428,7 @@ abstract contract BaseLoan is ILoan, MutualUpgrade {
   function _createDebtPosition(
     address lender,
     address token,
-    uint256 amount,
-    uint256 initialPrincipal
+    uint256 amount
   )
     internal
     returns(bytes32 positionId)
@@ -438,9 +447,10 @@ abstract contract BaseLoan is ILoan, MutualUpgrade {
       token: token,
       decimals: decimals,
       deposit: amount,
-      principal: initialPrincipal,
+      principal: 0,
       interestAccrued: 0,
-      interestRepaid: 0
+      interestRepaid: 0,
+      init: false
     });
 
     emit AddDebtPosition(lender, token, amount);

@@ -18,17 +18,14 @@ abstract contract TermLoan is BaseLoan, ITermLoan {
   // helper var.
   // time when loan is done
   uint256 endTime;
-  // principal for compounding interest or amoratization
-  uint256 initialPrincipal;
+  
+   mapping(bytes32 => TermMetadata) terms;
 
   // the only loan allowed on this contract. set in addDebtPosition()
   bytes32 loanPositionId;
 
   uint256 currentPaymentPeriodStart;
   uint256 overduePaymentsAmount;
-
-  // track if interest has already been calculated for this payment period since _accrueInterest is called in multiple places
-  mapping(uint256 => bool) isInterestAccruedForPeriod; // paymemnt period timestamp -> has interest accrued
 
   constructor(
     uint256 repaymentPeriodLength_,
@@ -40,38 +37,41 @@ abstract contract TermLoan is BaseLoan, ITermLoan {
     interestRate = new InterestRateTerm(interestRateBps);
   }
 
-  function addDebtPosition(
-    uint256 amount,
-    address token,
-    address lender
-  )
-    isActive
-    mutualUpgrade(lender, borrower) 
-    virtual
-    external
-    returns(bool)
-  {
-    require(loanPositionId == bytes32(0), 'Loan: only 1 position');
-
-    // send tokens directly to borrower because loan activates starts immediately
-    bool success = IERC20(token).transferFrom(
-      lender,
-      borrower,
-      amount
-    );
-    require(success, 'Loan: deposit failed');
-
-    bytes32 id = _createDebtPosition(lender, token, amount, amount);
-    
-    emit Borrow(id, amount); // loan is automatically borrowed
-
-    // start countdown to next payment due
+  function init() onlyBorrower external returns(bool) {
+    // start loan clock
     currentPaymentPeriodStart = block.timestamp;
-    // set end of loan
     endTime = block.timestamp + (repaymentPeriodLength * totalRepaymentPeriods);
-    initialPrincipal = principal;
 
-    // also add interest rate model here?
+    uint256 startingPrincipal = 0;
+    uint256 length = positionIds.length;
+    DebtPosition memory debt;
+    
+
+    for(uint256 i = 0; i < length; i++) {
+      bytes32 id = positionIds[i];
+      debt = debts[id];
+      bool success = IERC20(debt.token).transferFrom(debt.lender, borrower, debt.deposit);
+      if(!success) {
+        // lender can not make payment. remove from loan
+        _close(id);
+      } else {
+        debt.principal = debt.deposit;
+        emit Borrow(id, debt.principal); // loan is automatically borrowed
+
+        startingPrincipal += (debt.principal * _getTokenPrice(debt.token)) / (1 * 10 ** debt.decimals);
+
+        debt.init = true;
+        terms[id] = TermMetadata({
+          initialPrincipal: debt.principal,
+          currentPaymentPeriodStart: block.timestamp,
+          overdueAmount: 0
+        });
+      }
+    }
+    
+    // save global usd principal value
+    principal = startingPrincipal;
+
     return true;
   }
 
@@ -81,7 +81,8 @@ abstract contract TermLoan is BaseLoan, ITermLoan {
     returns(uint256)
   {
     // dont add interest if already charged for period
-    if(isInterestAccruedForPeriod[currentPaymentPeriodStart]) return 0;
+    bool isAlreadyPaid = debts[positionId].isInterestAccruedForPeriod(currentPaymentPeriodStart);
+    if(isAlreadyPaid) return 0;
 
     uint256 outstandingdDebt = debts[positionId].principal + debts[positionId].interestAccrued;
     
@@ -94,6 +95,7 @@ abstract contract TermLoan is BaseLoan, ITermLoan {
   ) override internal returns(bool) {
         // move all this logic to Revolver.sol
     DebtPosition memory debt = debts[positionId];
+    TermMetadata memory term = terms[positionId];
     
     uint256 price = _getTokenPrice(debt.token);
 
@@ -108,29 +110,29 @@ abstract contract TermLoan is BaseLoan, ITermLoan {
       emit RepayInterest(positionId, amount);
     } else {
       // pay off interest then any overdue payments then principal
+
       amount -= debt.interestAccrued;
       debt.interestRepaid += debt.interestAccrued;
+      totalInterestAccrued -= price * debt.interestAccrued / 1 * 10 ** debt.decimals;
 
       // emit before set to 0
       emit RepayInterest(positionId, debt.interestAccrued);
       debt.interestAccrued = 0;
-      totalInterestAccrued = 0;
 
-      if(overduePaymentsAmount > amount) {
+      if(term.overdueAmount > amount) {
         emit RepayOverdue(positionId, amount);
-        overduePaymentsAmount -= amount;
-
+        term.overdueAmount -= amount;
       } else {
         // emit 
-        amount -= overduePaymentsAmount;
-        emit RepayOverdue(positionId, overduePaymentsAmount);
-        overduePaymentsAmount = 0;
+        amount -= term.overdueAmount;
+        emit RepayOverdue(positionId, term.overdueAmount);
+        term.overdueAmount = 0;
 
         debt.principal -= amount;
         principal -= price * amount / debt.decimals;
         emit RepayPrincipal(positionId, amount);
       }
-y
+
       // missed payments get added to principal so missed payments + extra $ reduce principal
       debt.principal -= amount;
       principal -= price * amount ;
@@ -138,14 +140,12 @@ y
       emit RepayPrincipal(positionId, amount);
     }
 
-    currentPaymentPeriodStart += repaymentPeriodLength + 1; // can only repay once per peridd, 
+    term.currentPaymentPeriodStart += repaymentPeriodLength + 1; // can only repay once per peridd, 
 
+    terms[positionId] = term;
     debts[positionId] = debt;
 
     return true;
-  }
-  function accrueInterest() external returns(uint256 accruedValue) {
-    (, accruedValue) = _accrueInterest(loanPositionId);
   }
 
   function _close(bytes32 positionId) virtual override internal returns(bool) {
@@ -156,11 +156,19 @@ y
   function _healthcheck() virtual override(BaseLoan) internal returns(LoanLib.STATUS) {
     // if loan was already repaid then _healthcheck isn't called so must be defaulted
     if(_isEnd() && principal > 0) {
-      emit Default(loanPositionId);
+      // if defaulted figure out which ones
+      uint256 length = positionIds.length;
+      for(uint256 i = 0; i < length; i++) {
+        if(debts[positionIds[i]].principal > 0) emit Default(positionIds[i]);
+      }
+      
       return LoanLib.STATUS.LIQUIDATABLE;
     }
 
-    uint256 timeSinceRepayment = block.timestamp - currentPaymentPeriodStart;
+    // if period starts in the future bc already paid this period
+    uint256 timeSinceRepayment = currentPaymentPeriodStart > block.timestamp ?
+      0 :
+      block.timestamp - currentPaymentPeriodStart;
     // miss 1 payment? jail
     if(timeSinceRepayment > repaymentPeriodLength + GRACE_PERIOD) {
       return LoanLib.STATUS.DELINQUENT;

@@ -5,7 +5,7 @@ import { TermLoan } from "./TermLoan.sol";
 import { ILoan } from "../../interfaces/ILoan.sol";
 import { LoanLib } from "../../utils/LoanLib.sol";
 
-abstract contract BulletLoan is TermLoan {
+abstract contract AmoritizedLoan is TermLoan {
 
   constructor(
     uint256 repaymentPeriodLength_,
@@ -28,13 +28,13 @@ abstract contract BulletLoan is TermLoan {
       return 0;
     }
 
-    overduePaymentsAmount = _getMissedPayments();
+    overduePaymentsAmount = _getMissedPayments(positionId);
 
     uint256 totalOwed;
     bool isEnd = endTime - block.timestamp <= repaymentPeriodLength;
 
     // must already _accrueInterest in depositAndRepay/_getMissedPayments
-    totalOwed = (initialPrincipal / totalRepaymentPeriods) +
+    totalOwed = (terms[positionId].initialPrincipal / totalRepaymentPeriods) +
       debts[loanPositionId].interestAccrued +
       overduePaymentsAmount;
 
@@ -48,7 +48,7 @@ abstract contract BulletLoan is TermLoan {
     return totalOwed;
   }
 
-  function _getMissedPayments() virtual internal returns(uint256) {
+  function _getMissedPayments(bytes32 positionId) virtual internal returns(uint256) {
     if(currentPaymentPeriodStart + repaymentPeriodLength > block.timestamp) {
       // haven't missed a payment this cycle. may still owe from last missed cycles
       return overduePaymentsAmount;
@@ -57,14 +57,15 @@ abstract contract BulletLoan is TermLoan {
     // sol automatically rounds down so current period isn't included
     uint256 totalPeriodsMissed = (block.timestamp - currentPaymentPeriodStart) / repaymentPeriodLength;
 
-    DebtPosition memory debt = debts[loanPositionId];
+    DebtPosition memory debt = debts[positionId];
 
     uint256 totalMissedPayments = overduePaymentsAmount;
+
 
     for(uint i; i <= totalPeriodsMissed; i++) {
       // update storage directly because _accrueInterest uses/updates the values
       (uint256 interestOwed, ) = _accrueInterest(loanPositionId);
-      totalMissedPayments += interestOwed + (initialPrincipal / totalRepaymentPeriods);
+      totalMissedPayments += interestOwed + (terms[positionId].initialPrincipal / totalRepaymentPeriods);
     }
 
     return totalMissedPayments;
