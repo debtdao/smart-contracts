@@ -30,6 +30,8 @@ contract SpigotedLoanTest is DSTest {
     address constant revenueContract = address(0xdebf);
     uint lentAmount = 1 ether;
     
+    uint128 constant drawnRate = 100;
+    uint128 constant facilityRate = 1;
     uint constant ttl = 10 days; // allows us t
     uint8 constant ownerSplit = 10; // 10% of all borrower revenue goes to spigot
 
@@ -57,8 +59,8 @@ contract SpigotedLoanTest is DSTest {
         _mintAndApprove();
         
         // take out loan
-        loan.addDebtPosition(lentAmount, address(debtToken), lender);
-        loan.addDebtPosition(lentAmount, address(debtToken), lender);
+        loan.addDebtPosition(drawnRate, facilityRate, lentAmount, address(debtToken), lender);
+        loan.addDebtPosition(drawnRate, facilityRate, lentAmount, address(debtToken), lender);
 
         SpigotController.SpigotSettings memory setting = SpigotController.SpigotSettings({
           token: address(revenueToken),

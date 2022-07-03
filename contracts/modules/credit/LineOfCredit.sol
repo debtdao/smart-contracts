@@ -132,6 +132,8 @@ contract LineOfCredit is ILineOfCredit, MutualUpgrade, BaseLoan {
    * @param lender - address that will manage debt position 
   */
   function addDebtPosition(
+    uint128 drawnRate,
+    uint128 facilityRate,
     uint256 amount,
     address token,
     address lender
@@ -154,7 +156,7 @@ contract LineOfCredit is ILineOfCredit, MutualUpgrade, BaseLoan {
 
     positionIds.push(id); // add lender to end of repayment queue
 
-    // add interest rate 
+    require(interestRate.updateRate(id, drawnRate, facilityRate));
 
     return true;
   }

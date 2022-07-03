@@ -98,5 +98,7 @@ contract InterestRateCredit is IInterestRateCredit {
         facilityRate: facilityRate,
         lastAccrued: block.timestamp
       });
+
+      return true;
     }
 }

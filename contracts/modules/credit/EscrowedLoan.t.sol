@@ -18,6 +18,8 @@ contract LoanTest is DSTest {
     uint mintAmount = 100 ether;
     uint MAX_INT = 115792089237316195423570985008687907853269984665640564039457584007913129639935;
     uint minCollateralRatio = 1 ether; // 100%
+    uint128 drawnRate = 100;
+    uint128 facilityRate = 1;
 
     address borrower;
     address arbiter;
@@ -50,8 +52,8 @@ contract LoanTest is DSTest {
     }
 
     function test_can_liquidate_escrow_if_cratio_below_min() public {
-        loan.addDebtPosition(1 ether, address(supportedToken1), lender);
-        loan.addDebtPosition(1 ether, address(supportedToken1), lender);
+        loan.addDebtPosition(drawnRate, facilityRate, 1 ether, address(supportedToken1), lender);
+        loan.addDebtPosition(drawnRate, facilityRate, 1 ether, address(supportedToken1), lender);
         uint balanceOfEscrow = supportedToken2.balanceOf(address(escrow));
         uint balanceOfArbiter = supportedToken2.balanceOf(arbiter);
         bytes32 positionId = loan.positionIds(0);
@@ -65,8 +67,8 @@ contract LoanTest is DSTest {
 
     function test_health_becomes_liquidatable_if_cratio_below_min() public {
         assert(loan.healthcheck() == LoanLib.STATUS.ACTIVE);
-        loan.addDebtPosition(1 ether, address(supportedToken1), lender);
-        loan.addDebtPosition(1 ether, address(supportedToken1), lender);
+        loan.addDebtPosition(drawnRate, facilityRate, 1 ether, address(supportedToken1), lender);
+        loan.addDebtPosition(drawnRate, facilityRate, 1 ether, address(supportedToken1), lender);
         bytes32 positionId = loan.positionIds(0);
         loan.borrow(positionId, 1 ether);
         oracle.changePrice(address(supportedToken2), 1);
@@ -80,8 +82,8 @@ contract LoanTest is DSTest {
     function test_can_add_debt_position() public {
         assertEq(supportedToken1.balanceOf(address(loan)), 0, "Loan balance should be 0");
         assertEq(supportedToken1.balanceOf(address(this)), mintAmount, "Contract should have initial mint balance");
-        loan.addDebtPosition(1 ether, address(supportedToken1), lender);
-        loan.addDebtPosition(1 ether, address(supportedToken1), lender);
+        loan.addDebtPosition(drawnRate, facilityRate, 1 ether, address(supportedToken1), lender);
+        loan.addDebtPosition(drawnRate, facilityRate, 1 ether, address(supportedToken1), lender);
         bytes32 positionId = loan.positionIds(0);
         assert(positionId != bytes32(0));
         assertEq(supportedToken1.balanceOf(address(loan)), 1 ether, "Loan balance should be 1e18");
@@ -89,8 +91,8 @@ contract LoanTest is DSTest {
     }
 
     function test_can_borrow() public {
-        loan.addDebtPosition(1 ether, address(supportedToken1), lender);
-        loan.addDebtPosition(1 ether, address(supportedToken1), lender);
+        loan.addDebtPosition(drawnRate, facilityRate, 1 ether, address(supportedToken1), lender);
+        loan.addDebtPosition(drawnRate, facilityRate, 1 ether, address(supportedToken1), lender);
         assertEq(supportedToken1.balanceOf(address(this)), mintAmount - 1 ether, "Contract should have initial mint balance minus 1e18");
         bytes32 positionId = loan.positionIds(0);
         assertEq(supportedToken1.balanceOf(address(loan)), 1 ether, "Loan balance should be 1e18");
@@ -103,8 +105,8 @@ contract LoanTest is DSTest {
     }
 
     function test_can_manually_close_if_no_outstanding_debt() public {
-        loan.addDebtPosition(1 ether, address(supportedToken1), lender);
-        loan.addDebtPosition(1 ether, address(supportedToken1), lender);
+        loan.addDebtPosition(drawnRate, facilityRate, 1 ether, address(supportedToken1), lender);
+        loan.addDebtPosition(drawnRate, facilityRate, 1 ether, address(supportedToken1), lender);
         bytes32 positionId = loan.positionIds(0);
         loan.borrow(positionId, 1 ether);
         loan.depositAndRepay(1 ether);
@@ -115,8 +117,8 @@ contract LoanTest is DSTest {
     function test_can_repay_loan() public {
         int prc = oracle.getLatestAnswer(address(supportedToken1));
         uint tokenPriceOneUnit = prc < 0 ? 0 : uint(prc);
-        loan.addDebtPosition(1 ether, address(supportedToken1), lender);
-        loan.addDebtPosition(1 ether, address(supportedToken1), lender);
+        loan.addDebtPosition(drawnRate, facilityRate, 1 ether, address(supportedToken1), lender);
+        loan.addDebtPosition(drawnRate, facilityRate, 1 ether, address(supportedToken1), lender);
         bytes32 positionId = loan.positionIds(0);
         loan.borrow(positionId, 1 ether);
         assertEq(loan.getOutstandingDebt(), tokenPriceOneUnit, "Loan outstanding debt should be set as one full unit price in USD");
@@ -131,8 +133,8 @@ contract LoanTest is DSTest {
     function test_can_repay_part_of_loan() public {
         int prc = oracle.getLatestAnswer(address(supportedToken1));
         uint tokenPriceOneUnit = prc < 0 ? 0 : uint(prc);
-        loan.addDebtPosition(1 ether, address(supportedToken1), lender);
-        loan.addDebtPosition(1 ether, address(supportedToken1), lender);
+        loan.addDebtPosition(drawnRate, facilityRate, 1 ether, address(supportedToken1), lender);
+        loan.addDebtPosition(drawnRate, facilityRate, 1 ether, address(supportedToken1), lender);
         bytes32 positionId = loan.positionIds(0);
         loan.borrow(positionId, 1 ether);
         loan.depositAndRepay(0.5 ether);
@@ -144,14 +146,14 @@ contract LoanTest is DSTest {
     function test_can_repay_one_debt_and_keep_another() public {
         int prc = oracle.getLatestAnswer(address(supportedToken2));
         uint tokenPriceOneUnit = prc < 0 ? 0 : uint(prc);
-        loan.addDebtPosition(1 ether, address(supportedToken1), lender);
-        loan.addDebtPosition(1 ether, address(supportedToken1), lender);
+        loan.addDebtPosition(drawnRate, facilityRate, 1 ether, address(supportedToken1), lender);
+        loan.addDebtPosition(drawnRate, facilityRate, 1 ether, address(supportedToken1), lender);
         bytes32 positionId = loan.positionIds(0);
         loan.borrow(positionId, 1 ether);
         loan.depositAndRepay(1 ether);
         
-        loan.addDebtPosition(1 ether, address(supportedToken2), lender);
-        loan.addDebtPosition(1 ether, address(supportedToken2), lender);
+        loan.addDebtPosition(drawnRate, facilityRate, 1 ether, address(supportedToken2), lender);
+        loan.addDebtPosition(drawnRate, facilityRate, 1 ether, address(supportedToken2), lender);
         bytes32 positionId2 = loan.positionIds(1);
         loan.borrow(positionId2, 1 ether);
         assertEq(loan.getOutstandingDebt(), tokenPriceOneUnit, "Loan outstanding debt should be set as one full unit price in USD");
@@ -162,13 +164,13 @@ contract LoanTest is DSTest {
     function testFail_can_repay_loan_later_in_queue() public {
         int prc = oracle.getLatestAnswer(address(supportedToken2));
         uint tokenPriceOneUnit = prc < 0 ? 0 : uint(prc);
-        loan.addDebtPosition(1 ether, address(supportedToken1), lender);
-        loan.addDebtPosition(1 ether, address(supportedToken1), lender);
+        loan.addDebtPosition(drawnRate, facilityRate, 1 ether, address(supportedToken1), lender);
+        loan.addDebtPosition(drawnRate, facilityRate, 1 ether, address(supportedToken1), lender);
         bytes32 positionId = loan.positionIds(0);
         loan.borrow(positionId, 1 ether);
         loan.depositAndRepay(1 ether);
-        loan.addDebtPosition(1 ether, address(supportedToken2), lender);
-        loan.addDebtPosition(1 ether, address(supportedToken2), lender);
+        loan.addDebtPosition(drawnRate, facilityRate, 1 ether, address(supportedToken2), lender);
+        loan.addDebtPosition(drawnRate, facilityRate, 1 ether, address(supportedToken2), lender);
 
         bytes32 positionId2 = loan.positionIds(1);
         loan.borrow(positionId2, 1 ether);
@@ -177,8 +179,8 @@ contract LoanTest is DSTest {
     }
 
     function test_can_deposit_and_close_position() public {
-        loan.addDebtPosition(1 ether, address(supportedToken1), lender);
-        loan.addDebtPosition(1 ether, address(supportedToken1), lender);
+        loan.addDebtPosition(drawnRate, facilityRate, 1 ether, address(supportedToken1), lender);
+        loan.addDebtPosition(drawnRate, facilityRate, 1 ether, address(supportedToken1), lender);
         bytes32 positionId = loan.positionIds(0);
         assertEq(supportedToken1.balanceOf(address(loan)), 1 ether, "Loan balance should be 1e18");
         loan.borrow(positionId, 1 ether);
@@ -193,8 +195,8 @@ contract LoanTest is DSTest {
 
     function test_can_withdraw_from_position() public {
         assertEq(supportedToken1.balanceOf(address(this)), mintAmount, "Contract should have initial mint balance");
-        loan.addDebtPosition(0.5 ether, address(supportedToken1), lender);
-        loan.addDebtPosition(0.5 ether, address(supportedToken1), lender);
+        loan.addDebtPosition(drawnRate, facilityRate, 0.5 ether, address(supportedToken1), lender);
+        loan.addDebtPosition(drawnRate, facilityRate, 0.5 ether, address(supportedToken1), lender);
         bytes32 positionId = loan.positionIds(0);
         assertEq(supportedToken1.balanceOf(address(this)), mintAmount - 0.5 ether, "Contract should have initial mint balance - 1e18 / 2");
         assertEq(supportedToken1.balanceOf(address(loan)), 0.5 ether, "Loan balance should be 1e18 / 2");
@@ -204,8 +206,8 @@ contract LoanTest is DSTest {
     }
 
     function test_loan_status_changes_to_liquidatable() public {
-        loan.addDebtPosition(1 ether, address(supportedToken1), lender);
-        loan.addDebtPosition(1 ether, address(supportedToken1), lender);
+        loan.addDebtPosition(drawnRate, facilityRate, 1 ether, address(supportedToken1), lender);
+        loan.addDebtPosition(drawnRate, facilityRate, 1 ether, address(supportedToken1), lender);
         bytes32 positionId = loan.positionIds(0);
         loan.borrow(positionId, 1 ether);
         oracle.changePrice(address(supportedToken2), 1);
@@ -213,46 +215,46 @@ contract LoanTest is DSTest {
     }
 
     function test_cannot_open_debt_position_if_only_one_party_agrees() public {
-        loan.addDebtPosition(1 ether, address(supportedToken1), lender);
+        loan.addDebtPosition(drawnRate, facilityRate, 1 ether, address(supportedToken1), lender);
         assertEq(supportedToken1.balanceOf(address(loan)), 0, "Loan balance should be 0");
     }
 
     function testFail_cannot_open_debt_position_if_only_one_party_agrees() public {
-        loan.addDebtPosition(1 ether, address(supportedToken1), lender);
+        loan.addDebtPosition(drawnRate, facilityRate, 1 ether, address(supportedToken1), lender);
         loan.positionIds(0);
     }
 
     function testFail_cannot_borrow_from_debt_position_if_under_collateralised() public {
-        loan.addDebtPosition(100 ether, address(supportedToken1), lender);
-        loan.addDebtPosition(100 ether, address(supportedToken1), lender);
+        loan.addDebtPosition(drawnRate, facilityRate, 100 ether, address(supportedToken1), lender);
+        loan.addDebtPosition(drawnRate, facilityRate, 100 ether, address(supportedToken1), lender);
         bytes32 positionId = loan.positionIds(0);
         loan.borrow(positionId, 100 ether);
     }
 
     function testFail_cannot_withdraw_if_all_loaned_out() public {
-        loan.addDebtPosition(1 ether, address(supportedToken1), lender);
-        loan.addDebtPosition(1 ether, address(supportedToken1), lender);
+        loan.addDebtPosition(drawnRate, facilityRate, 1 ether, address(supportedToken1), lender);
+        loan.addDebtPosition(drawnRate, facilityRate, 1 ether, address(supportedToken1), lender);
         bytes32 positionId = loan.positionIds(0);
         loan.borrow(positionId, 1 ether);
         loan.withdraw(positionId, 0.1 ether);
     }
 
     function testFail_cannot_borrow_more_than_position() public {
-        loan.addDebtPosition(1 ether, address(supportedToken1), lender);
-        loan.addDebtPosition(1 ether, address(supportedToken1), lender);
+        loan.addDebtPosition(drawnRate, facilityRate, 1 ether, address(supportedToken1), lender);
+        loan.addDebtPosition(drawnRate, facilityRate, 1 ether, address(supportedToken1), lender);
         bytes32 positionId = loan.positionIds(0);
         loan.borrow(positionId, 100 ether);
     }
 
     function testFail_cannot_create_debt_with_tokens_unsupported_by_oracle() public {
-        loan.addDebtPosition(1 ether, address(unsupportedToken), lender);
-        loan.addDebtPosition(1 ether, address(unsupportedToken), lender);
+        loan.addDebtPosition(drawnRate, facilityRate, 1 ether, address(unsupportedToken), lender);
+        loan.addDebtPosition(drawnRate, facilityRate, 1 ether, address(unsupportedToken), lender);
     }
 
     function testFail_cannot_borrow_if_not_active() public {
         assert(loan.healthcheck() == LoanLib.STATUS.ACTIVE);
-        loan.addDebtPosition(0.1 ether, address(supportedToken1), lender);
-        loan.addDebtPosition(0.1 ether, address(supportedToken1), lender);
+        loan.addDebtPosition(drawnRate, facilityRate, 0.1 ether, address(supportedToken1), lender);
+        loan.addDebtPosition(drawnRate, facilityRate, 0.1 ether, address(supportedToken1), lender);
         bytes32 positionId = loan.positionIds(0);
         loan.borrow(positionId, 0.1 ether);
         oracle.changePrice(address(supportedToken2), 1);
@@ -261,8 +263,8 @@ contract LoanTest is DSTest {
     }
 
     function testFail_cannot_borrow_against_closed_position() public {
-        loan.addDebtPosition(1 ether, address(supportedToken1), lender);
-        loan.addDebtPosition(1 ether, address(supportedToken1), lender);
+        loan.addDebtPosition(drawnRate, facilityRate, 1 ether, address(supportedToken1), lender);
+        loan.addDebtPosition(drawnRate, facilityRate, 1 ether, address(supportedToken1), lender);
         bytes32 positionId = loan.positionIds(0);
         loan.borrow(positionId, 1 ether);
         loan.depositAndClose();
@@ -270,8 +272,8 @@ contract LoanTest is DSTest {
     }
 
     function testFail_cannot_manually_close_if_debt_outstanding() public {
-        loan.addDebtPosition(1 ether, address(supportedToken1), lender);
-        loan.addDebtPosition(1 ether, address(supportedToken1), lender);
+        loan.addDebtPosition(drawnRate, facilityRate, 1 ether, address(supportedToken1), lender);
+        loan.addDebtPosition(drawnRate, facilityRate, 1 ether, address(supportedToken1), lender);
         bytes32 positionId = loan.positionIds(0);
         loan.borrow(positionId, 0.1 ether);
         loan.close(positionId);
