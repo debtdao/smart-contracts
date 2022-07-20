@@ -194,10 +194,24 @@ contract SpigotedLoan is ISpigotedLoan, LineOfCredit {
       targetToken,
       tokensBought
     );
-
+)
     // update unused if we didnt sell all claimed tokens in trade
     // also underflow revert protection here
-    unusedTokens[claimToken] += IERC20(claimToken).balanceOf(address(this)) - existingClaimTokens;
+
+    // TODO - fix, we want all claim tokens to be usable 
+    // unusedTokens[claimToken] += IERC20(claimToken).balanceOf(address(this)) - existingClaimTokens;
+    // fix?
+    uint256  currBalance = IERC20(claimToken).balanceOf(address(this)) ;
+    int128 diff = currBalance - existingBalance
+    // make sure we only used claimed and accounted for unused tokens.
+    // Ensures we dont use a lenders deposit to paydown another lenders principal
+    require(
+       diff >= 0 || diff < unused[claimToken],
+      'SpgtCnsmr: used non-spigot funds'
+    );
+    // if negative subtracts used tokens for trade, if postive adds excess claimed tokens to unused
+    unused[tokens] += diff;
+
   }
 
 
