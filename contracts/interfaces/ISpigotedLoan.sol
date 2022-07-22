@@ -14,6 +14,8 @@ interface ISpigotedLoan {
     uint256 indexed debtTokensBought
   );
   
+  function unused(address token) external returns(uint256);
+
   function claimAndTrade(
     address claimToken, 
     bytes calldata zeroExTradeData

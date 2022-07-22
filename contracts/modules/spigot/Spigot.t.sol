@@ -58,7 +58,7 @@ contract SpigotTest is DSTest {
 
         settings = SpigotController.SpigotSettings(_token, split, claimFunc, newOwnerFunc);
        
-        spigotController = new SpigotController(owner, treasury, operator, c, s, _whitelist);
+        spigotController = new SpigotController(owner, treasury, operator);
         
         // add spigot for revenue contract 
         require(spigotController.addSpigot(revenueContract, settings), "Failed to add spigot");

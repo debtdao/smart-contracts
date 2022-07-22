@@ -34,15 +34,14 @@ library LoanLib {
     }
 
     /**
-     * @notice
-     * @dev - Assumes oracles all return answers in USD with 1e8 decimals
-           - Does not check if price < 0. HAndled in Oracle or Loan
-     * @param oracle - oracle contract specified by loan getting valuation
-     * @param token - token to value on oracle
-     * @param amount - token amount
+     * @notice         - Gets total valuation for amount of tokens using given oracle. 
+     * @dev            - Assumes oracles all return answers in USD with 1e8 decimals
+                       - Does not check if price < 0. HAndled in Oracle or Loan
+     * @param oracle   - oracle contract specified by loan getting valuation
+     * @param token    - token to value on oracle
+     * @param amount   - token amount
      * @param decimals - token decimals
-     * @return total value in usd of all tokens 
-
+     * @return         - total value in usd of all tokens 
      */
     function getValuation(
       IOracle oracle,
@@ -53,18 +52,56 @@ library LoanLib {
       external
       returns(uint256)
     {
-      int prc = oracle.getLatestAnswer(token);
-      return prc == 0 ? 0 : (amount * uint(prc)) / (1 * 10 ** decimals);
+      return _calculateValue(oracle.getLatestAnswer(token), amount, decimals);
+    }
+
+    /**
+     * @notice
+     * @dev            - Assumes oracles all return answers in USD with 1e8 decimals
+                       - Does not check if price < 0. HAndled in Oracle or Loan
+     * @param price    - oracle price of asset. 8 decimals
+     * @param amount   - amount of tokens vbeing valued.
+     * @param decimals - token decimals to remove for usd price
+     * @return         - total USD value of amount in 8 decimals 
+     */
+    function calculateValue(
+      int price,
+      uint256 amount,
+      uint8 decimals
+    )
+      internal
+      returns(uint256)
+    {
+      return _calculateValue(price, amount, decimals);
+    }
+
+
+      /**
+     * @notice         - calculates value of tokens and denominates in USD 8
+     * @dev            - Assumes all oracles return USD responses in 1e8 decimals
+     * @param price    - oracle price of asset. 8 decimals
+     * @param amount   - amount of tokens vbeing valued.
+     * @param decimals - token decimals to remove for usd price
+     * @return         - total value in usd of all tokens 
+     */
+    function _calculateValue(
+      int price,
+      uint256 amount,
+      uint8 decimals
+    )
+      internal
+      returns(uint256)
+    {
+      return price <= 0 ? 0 : (amount * uint(price)) / (1 * 10 ** decimals);
     }
 
 
     /**
-     * @dev Create deterministic hash id for a debt position on `loan` given position details
-     * @param loan - loan that debt position exists on
+     * @dev          - Create deterministic hash id for a debt position on `loan` given position details
+     * @param loan   - loan that debt position exists on
      * @param lender - address managing debt position
-     * @param token - token that is being lent out in debt position
+     * @param token  - token that is being lent out in debt position
      * @return positionId
-
      */
     function computePositionId(address loan, address lender, address token) external pure returns(bytes32) {
       return keccak256(abi.encode(loan, lender, token));
@@ -76,7 +113,6 @@ library LoanLib {
      * @param positions - all current active positions on the loan
      * @param id - hash id that must be removed from active positions
      * @return newPositions - all active positions on loan after `id` is removed
-
      */
     function removePosition(bytes32[] calldata positions, bytes32 id) external view returns(bytes32[] memory) {
       uint256 newLength = positions.length - 1;
@@ -93,12 +129,11 @@ library LoanLib {
       return newPositions;
     }
 
-
     /**
      * @notice - removes debt position from head of repayement queue and puts it at end of line
      *         - moves 2nd in line to first
      * @param positions - all current active positions on the loan
-     * @return newPositions - all active positions on loan after `id` is removed
+     * @return newPositions - positions after moving first to last in array
      */
     function stepQ(bytes32[] calldata positions) external view returns(bytes32[] memory) {
       uint256 len = positions.length ;

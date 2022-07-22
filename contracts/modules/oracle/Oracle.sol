@@ -16,12 +16,6 @@ contract Oracle is IOracle {
      * Returns the latest price in USD
      */
     function getLatestAnswer(address token) external returns (int) {
-        (bool success, bytes memory result) = token.call(abi.encodeWithSignature("asset()"));
-        if(success && result.length > 0) {
-            // get the underlying token value (if ERC4626)
-            // NB: Share token to underlying ratio might not be 1:1
-            token = abi.decode(result, (address));
-        }
         (
             /* uint80 roundID */, 
             int price,

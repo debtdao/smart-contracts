@@ -5,7 +5,7 @@ import { DSTest } from  "../../../lib/ds-test/src/test.sol";
 import { LoanLib } from "../../utils/LoanLib.sol";
 import { RevenueToken } from "../../mock/RevenueToken.sol";
 import { SimpleOracle } from "../../mock/SimpleOracle.sol";
-import { BasicEscrowedLoan } from "./BasicEscrowedLoan.sol";
+import { SecuredLoan } from "./SecuredLoan.sol";
 
 contract LoanTest is DSTest {
 
@@ -14,7 +14,7 @@ contract LoanTest is DSTest {
     RevenueToken supportedToken2;
     RevenueToken unsupportedToken;
     SimpleOracle oracle;
-    BasicEscrowedLoan loan;
+    SecuredLoan loan;
     uint mintAmount = 100 ether;
     uint MAX_INT = 115792089237316195423570985008687907853269984665640564039457584007913129639935;
     uint minCollateralRatio = 1 ether; // 100%
@@ -33,7 +33,7 @@ contract LoanTest is DSTest {
         supportedToken2 = new RevenueToken();
         unsupportedToken = new RevenueToken();
         oracle = new SimpleOracle(address(supportedToken1), address(supportedToken2));
-        loan = new BasicEscrowedLoan(address(oracle), arbiter, borrower, 1 ether, 150 days);
+        loan = new SecuredLoan(address(oracle), arbiter, borrower, address(0), 1 ether, 150 days, 0);
         escrow = loan.escrow();
         _mintAndApprove();
         escrow.addCollateral(1 ether, address(supportedToken2));
@@ -189,8 +189,6 @@ contract LoanTest is DSTest {
         loan.depositAndClose();
         assertEq(supportedToken1.balanceOf(address(loan)), 1 ether, "Loan balance should be 1e18");
         assertEq(loan.getOutstandingDebt(), 0, "Loan outstanding debt should be 0");
-        assertEq(loan.principalUsd(), 0, "Principle should be 0");
-        assertEq(loan.interestUsd(), 0, "No interest should have been accrued");
     }
 
     function test_can_withdraw_from_position() public {

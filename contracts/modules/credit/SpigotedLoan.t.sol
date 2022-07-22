@@ -82,20 +82,28 @@ contract SpigotedLoanTest is DSTest {
       // allow loan to use tokens for depositAndRepay()
       debtToken.mint(address(this), MAX_REVENUE);
       debtToken.approve(address(loan), MAX_INT);
+      // allow trades
+      debtToken.approve(address(dex), MAX_INT);
       
 
       // tokens to trade
+
       revenueToken.mint(address(this), MAX_REVENUE);
+      revenueToken.mint(address(loan), MAX_REVENUE);
+      revenueToken.mint(address(dex), MAX_REVENUE);
+      revenueToken.approve(address(dex), MAX_INT);
+
       // revenue earned
       revenueToken.mint(address(spigot), MAX_REVENUE);
       // allow deposits
       revenueToken.approve(address(loan), MAX_INT);
+
     }
 
     // can only remove spigot if repaid or insolvent (propery access for both situations)
 
     // trades work
-    function _x_test_can_trade(uint buyAmount, uint sellAmount) public {
+    function test_can_trade(uint buyAmount, uint sellAmount) public {
       // oracle prices not relevant to test
       if(buyAmount == 0 || sellAmount == 0) return;
       if(buyAmount > MAX_REVENUE || sellAmount > MAX_REVENUE) return;
@@ -113,20 +121,15 @@ contract SpigotedLoanTest is DSTest {
       loan.claimAndTrade(address(revenueToken), tradeData);
       
       // dex balances
-      assertEq(revenueToken.balanceOf((address(dex))), sellAmount + MAX_REVENUE);
       assertEq(debtToken.balanceOf((address(dex))), MAX_REVENUE - buyAmount);
+      assertEq(revenueToken.balanceOf((address(dex))), MAX_REVENUE + sellAmount);
       
       // loan balances
       assertEq(debtToken.balanceOf((address(loan))), lentAmount + buyAmount);
-      assertEq(revenueToken.balanceOf((address(loan))), 0);
-      
-      // spigot balances
-      // should have no tokens.  most sent to tresury in setup(). rest sent in claimAndTrade
-      assertEq(revenueToken.balanceOf((address(spigot))), 0);
-      assertEq(debtToken.balanceOf((address(spigot))), 0);
+      assertEq(revenueToken.balanceOf((address(loan))), MAX_REVENUE + claimable - sellAmount);
     }
 
-    function _x_test_can_trade_and_repay(uint buyAmount, uint sellAmount) public {
+    function test_can_trade_and_repay(uint buyAmount, uint sellAmount) public {
       if(buyAmount == 0 || sellAmount == 0) return;
       if(buyAmount > MAX_REVENUE || sellAmount > MAX_REVENUE) return;
 
@@ -135,7 +138,7 @@ contract SpigotedLoanTest is DSTest {
       // amount of tokens owed in interest (not usd owed!)
       uint256 interest = loan.accrueInterest() / uint(oracle.getLatestAnswer(address(debtToken)));
 
-      // oracle prices not relevant to test
+      // oracle prices not relevant to trading test
       bytes memory tradeData = abi.encodeWithSignature(
         'trade(address,address,uint256,uint256)',
         address(revenueToken),
@@ -144,8 +147,9 @@ contract SpigotedLoanTest is DSTest {
         buyAmount
       );
 
+      uint claimable = spigot.getEscrowBalance(address(revenueToken));
 
-      loan.claimAndTrade(address(revenueToken), tradeData);
+      loan.claimAndRepay(address(revenueToken), tradeData);
 
       // principal, interest, repaid
       (,uint p, uint i, uint r,,,) = loan.debts(loan.positionIds(0));
@@ -165,9 +169,12 @@ contract SpigotedLoanTest is DSTest {
         assertEq(i, 0);
         assertEq(r, interest);
 
-        assertEq(loan.unusedTokens(address(debtToken)), buyAmount - i);
-        assertEq(loan.unusedTokens(address(revenueToken)), 0); // TODO come up with scenario where this should be > 0
+        emit log_named_uint("----  BUY AMOUNT ----", buyAmount);
+        emit log_named_uint("----  SELL AMOUNT ----", sellAmount);
       }
+
+      assertEq(loan.unused(address(debtToken)), buyAmount); // dont need bought tokens to repay debt
+      assertEq(loan.unused(address(revenueToken)), MAX_REVENUE - sellAmount + claimable); // TODO come up with scenario where this should be > 0
 
     }
 
@@ -176,7 +183,7 @@ contract SpigotedLoanTest is DSTest {
     // Spigot integration tests
     // Only checking that Loan functions dont fail. Check `Spigot.t.sol` for expected functionality
 
-    function _x_test_can_deposit_and_repay() public {
+    function test_can_deposit_and_repay() public {
       loan.borrow(loan.positionIds(0), lentAmount);
       loan.depositAndRepay(lentAmount);
     }
@@ -190,8 +197,7 @@ contract SpigotedLoanTest is DSTest {
     }
 
     function test_release_spigot_when_repaid() public {
-      assertTrue(loan.close(loan.positionIds(0)));
-
+      loan.close(loan.positionIds(0));
       assertTrue(loan.releaseSpigot());
 
       // TODO: bad test, will be address(this either way
@@ -204,7 +210,7 @@ contract SpigotedLoanTest is DSTest {
 
     function test_sweep_tokens_when_repaid() public {
       assertTrue(loan.close(loan.positionIds(0)));
-      uint unused = loan.unusedTokens(address(debtToken));
+      uint unused = loan.unused(address(debtToken));
       assertEq(loan.sweep(address(debtToken)), unused);
     }
 

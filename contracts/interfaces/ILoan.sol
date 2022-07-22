@@ -22,13 +22,15 @@ interface ILoan {
   // can reference only positionId once AddDebtPosition is emitted because it will be stored in subgraph
   // initialPrinicipal tells us if its a Revolver or Term
 
-  event Withdraw(bytes32 indexed positionId, uint256 indexed amount);
-  // lender removing funds from Loan (interest or principal)
+  event WithdrawDeposit(bytes32 indexed positionId, uint256 indexed amount);
+  // lender removing funds from Loan  principal
+  event WithdrawProfit(bytes32 indexed positionId, uint256 indexed amount);
+  // lender taking interest earned out of contract
 
   event CloseDebtPosition(bytes32 indexed positionId);
   // lender officially repaid in full. if Credit then facility has also been closed.
 
-  event InterestAccrued(bytes32 indexed positionId, uint256 indexed tokenAmount, uint256 indexed value);
+  event InterestAccrued(bytes32 indexed positionId, uint256 indexed amount, uint256 indexed value);
   // interest added to borrowers outstanding balance
 
 
@@ -41,13 +43,10 @@ interface ILoan {
 
   event RepayPrincipal(bytes32 indexed positionId, uint256 indexed amount, uint256 indexed value);
 
-  event Liquidate(bytes32 indexed positionId, uint256 indexed amount, address indexed token);
-
   event Default(bytes32 indexed positionId, uint256 indexed amount, uint256 indexed value);
 
   // External Functions  
   function withdraw(bytes32 positionId, uint256 amount) external returns(bool);
-  function liquidate(bytes32 positionId, uint256 amount, address targetToken) external returns(uint256);
 
   function depositAndRepay(uint256 amount) external returns(bool);
   function depositAndClose() external returns(bool);
