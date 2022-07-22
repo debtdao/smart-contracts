@@ -27,7 +27,7 @@ contract SpigotedLoan is ISpigotedLoan, LineOfCredit {
 
 
   /**
-   * @dev - BaseLoan contract with additional functionality for integrating with Spigot and borrower revenue streams to repay loans
+   * @notice - LineofCredit contract with additional functionality for integrating with Spigot and borrower revenue streams to repay loans
    * @param oracle_ - price oracle to use for getting all token values
    * @param arbiter_ - neutral party with some special priviliges on behalf of borrower and lender
    * @param borrower_ - the debitor for all debt positions in this contract

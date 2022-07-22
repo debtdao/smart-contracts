@@ -111,7 +111,7 @@ contract Escrow is IEscrow {
     */
     function addCollateral(uint amount, address token) external returns(uint) {
         require(amount > 0, "Escrow: amount is 0");
-        require(enabled[token] "Escrow: bad token");
+        require(enabled[token], "Escrow: bad token");
 
         require(IERC20(token).transferFrom(msg.sender, address(this), amount));
 

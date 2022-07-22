@@ -1,23 +1,35 @@
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-import { BaseLoan } from "./BaseLoan.sol";
 import { LoanLib } from "../../utils/LoanLib.sol";
 import { MutualUpgrade } from "../../utils/MutualUpgrade.sol";
-
-import { ILineOfCredit } from "../../interfaces/ILineOfCredit.sol";
 import { InterestRateCredit } from "../interest-rate/InterestRateCredit.sol";
 
-contract LineOfCredit is ILineOfCredit, MutualUpgrade, BaseLoan {
+
+import { IOracle } from "../../interfaces/IOracle.sol";
+import { ILineOfCredit } from "../../interfaces/ILineOfCredit.sol";
+
+contract LineOfCredit is ILineOfCredit, MutualUpgrade {
+  address immutable public borrower;
+  
+  address immutable public arbiter;
+  
+  IOracle immutable public oracle; 
+  
+  InterestRateCredit immutable public interestRate;
   
   uint256 immutable public deadline;
   
   bytes32[] public positionIds; // all active positions
 
   mapping(bytes32 => DebtPosition) public debts; // positionId -> DebtPosition
-  
-  InterestRateCredit immutable public interestRate;
 
 
+
+  // Loan Financials aggregated accross all existing  DebtPositions
+  LoanLib.STATUS public loanStatus;
+
+  uint256 public principalUsd;  // initial principal
+  uint256 public interestUsd;   // unpaid interest
 
   /**
    * @dev - Loan borrower and proposed lender agree on terms
@@ -33,13 +45,26 @@ contract LineOfCredit is ILineOfCredit, MutualUpgrade, BaseLoan {
     address arbiter_,
     address borrower_,
     uint256 ttl_
-  )
-    BaseLoan(oracle_, arbiter_, borrower_)
-  {
+  ) {
     interestRate = new InterestRateCredit();
     deadline = block.timestamp + ttl_;
     
     loanStatus = LoanLib.STATUS.ACTIVE;
+
+    emit DeployLoan(
+      oracle_,
+      arbiter_,
+      borrower_
+    );
+  }
+
+  ///////////////
+  // MODIFIERS //
+  ///////////////
+
+  modifier isActive() {
+    require(loanStatus == LoanLib.STATUS.ACTIVE, 'Loan: no op');
+    _;
   }
 
   modifier whileBorrowing() {
@@ -47,10 +72,25 @@ contract LineOfCredit is ILineOfCredit, MutualUpgrade, BaseLoan {
     _;
   }
 
+  modifier onlyBorrower() {
+    require(msg.sender == borrower, 'Loan: only borrower');
+    _;
+  }
+
+  modifier onlyArbiter() {
+    require(msg.sender == arbiter, 'Loan: only arbiter');
+    _;
+  }
+
+
+  function healthcheck() external returns(LoanLib.STATUS) {
+    return _updateLoanStatus(_healthcheck());
+  }
+
   function _healthcheck() internal virtual override returns(LoanLib.STATUS) {
-    LoanLib.STATUS s = BaseLoan._healthcheck();
-    if(s != LoanLib.STATUS.ACTIVE) {
-      return s;
+    // if loan is in a final end state then do not run _healthcheck()
+    if(loanStatus == LoanLib.STATUS.REPAID || loanStatus == LoanLib.STATUS.INSOLVENT) {
+      return loanStatus;
     }
 
     // Liquidate if all lines of credit arent closed by end of term
@@ -87,16 +127,13 @@ contract LineOfCredit is ILineOfCredit, MutualUpgrade, BaseLoan {
     if(len == 0) return (0,0);
 
     DebtPosition memory debt;
-    // for(uint i = 0; i < len; i++) {
-    //   debt = debts[positionIds[i]];
-    while(len > 0) {
-      --len;
+    for(uint i = 0; i < len; i++) {
       debt = debts[positionIds[len]];
 
       int price = oracle.getLatestAnswer(debt.token);
 
-      principal += LoanLib.calculateValue(price, debt.token, debt.principal, debt.decimals);
-      interest += LoanLib.calculateValue(price, debt.token, debt.interestAccrued, debt.decimals);
+      principal += LoanLib.calculateValue(price, debt.principal, debt.decimals);
+      interest += LoanLib.calculateValue(price, debt.interestAccrued, debt.decimals);
     }
 
     principalUsd = principal;
@@ -118,7 +155,7 @@ contract LineOfCredit is ILineOfCredit, MutualUpgrade, BaseLoan {
   }
 
   /**
-   * @dev - Loan borrower and proposed lender agree on terms
+   * @notice - Loan borrower and proposed lender agree on terms
             and add it to potential options for borrower to drawdown on
             Lender and borrower must both call function for MutualUpgrade to add debt position to Loan
    * @dev    - callable by `lender` and `borrower
@@ -138,7 +175,7 @@ contract LineOfCredit is ILineOfCredit, MutualUpgrade, BaseLoan {
     virtual
     override
     external
-    returns(bool)
+    returns(bytes32)
   {
     bool success = IERC20(token).transferFrom(
       lender,
@@ -149,19 +186,18 @@ contract LineOfCredit is ILineOfCredit, MutualUpgrade, BaseLoan {
 
     bytes32 id = _createDebtPosition(lender, token, amount, 0);
 
+    require(interestRate.setRate(id, drawnRate, facilityRate));
+    emit SetRates(id, drawnRate, facilityRate);
 
-    require(interestRate.updateRate(id, drawnRate, facilityRate));
-    emit UpdateRates(id, drawnRate, facilityRate);
-
-    return true;
+    return id;
   }
 
   ///////////////
   // REPAYMENT //
   ///////////////
 
-   /**
-   * @dev - Transfers enough tokens to repay entire debt position from `borrower` to Loan contract.
+  /**
+   * @notice - Transfers enough tokens to repay entire debt position from `borrower` to Loan contract.
    * @dev - callable by borrower
             
   */
@@ -312,6 +348,24 @@ contract LineOfCredit is ILineOfCredit, MutualUpgrade, BaseLoan {
     return true;
   }
 
+  function withdrawInterest(bytes32 positionId) override external returns(uint256) {
+    require(msg.sender == debts[positionId].lender, "Loan: only lender can withdraw");
+    
+    _accrueInterest(positionId);
+
+    uint256 amount = debts[positionId].interestAccrued();
+
+    bool success = IERC20(debts[positionId].token).transfer(
+      debts[positionId].lender,
+      amount
+    );
+    require(success, 'Loan: withdraw failed');
+
+    emit WithdrawProfit(positionId, amount);
+    
+    return amount;
+  }
+
 
   /**
    * @dev - Deletes debt position preventing any more borrowing.
@@ -342,6 +396,14 @@ contract LineOfCredit is ILineOfCredit, MutualUpgrade, BaseLoan {
   //////////////////////
   //  Internal  funcs //
   //////////////////////
+
+  function _updateLoanStatus(LoanLib.STATUS status) internal returns(LoanLib.STATUS) {
+    if(loanStatus == status) return loanStatus;
+    loanStatus = status;
+    emit UpdateLoanStatus(uint256(status));
+    return status;
+  }
+
 
 
     function _createDebtPosition(

@@ -15,7 +15,7 @@ interface ILineOfCredit is ILoan {
     address token;            // token being lent out
   }
 
-  event UpdateRates(bytes32 indexed positionId, uint128 indexed drawnRate, uint128 indexed facilityRate);
+  event SetRates(bytes32 indexed positionId, uint128 indexed drawnRate, uint128 indexed facilityRate);
 
   function addDebtPosition(
     uint128 drawnRate,
@@ -23,7 +23,7 @@ interface ILineOfCredit is ILoan {
     uint256 amount,
     address token,
     address lender
-  ) external returns(bool);
+  ) external returns(bytes32);
   function borrow(bytes32 positionId, uint256 amount) external returns(bool);
   function close(bytes32 positionId) external returns(bool);
 }

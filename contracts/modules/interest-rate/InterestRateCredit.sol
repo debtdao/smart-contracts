@@ -4,18 +4,14 @@ import { IInterestRateCredit } from "../../interfaces/IInterestRateCredit.sol";
 
 
 contract InterestRateCredit is IInterestRateCredit {
-
-    ///////////  CONSTANTS  ///////////
     uint256 constant ONE_YEAR = 364.25 days; // one year in sec to use in calculations for rates
     uint256 constant BASE_DENOMINATOR = 10000; // div 100 for %, div 100 for bps in numerator
     uint256 constant INTEREST_DENOMINATOR = ONE_YEAR * BASE_DENOMINATOR;
 
-    ///////////  VARIABLES  ///////////
     address immutable loanContract;
     mapping(bytes32 => Rate) public rates; // positionId -> lending rates
 
     
-    ///////////  CONSTRUCTOR  ///////////
 
     /**
       * @notice Interest contract for line of credit contracts
@@ -87,7 +83,7 @@ contract InterestRateCredit is IInterestRateCredit {
      * @dev - Loan contract responsible for calling accrueInterest() before updateInterest() if necessary
      * @dev    - callable by `loan`
      */
-    function updateRate(
+    function setRate(
       bytes32 positionId,
       uint128 drawnRate,
       uint128 facilityRate

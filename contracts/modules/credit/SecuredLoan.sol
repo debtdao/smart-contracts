@@ -3,8 +3,6 @@ import { LoanLib } from "../../utils/LoanLib.sol";
 import { EscrowedLoan } from "./EscrowedLoan.sol";
 import { SpigotedLoan } from "./SpigotedLoan.sol";
 import { LineOfCredit } from "./LineOfCredit.sol";
-import { BaseLoan } from "./BaseLoan.sol";
-import { ILoan } from "../../interfaces/ILoan.sol";
 
 contract SecuredLoan is SpigotedLoan, EscrowedLoan {
 
@@ -49,7 +47,6 @@ contract SecuredLoan is SpigotedLoan, EscrowedLoan {
     address targetToken
   )
     onlyArbiter
-  
     external
     returns(uint256)
   {

@@ -18,7 +18,7 @@ interface IInterestRateCredit {
     uint256 facilityAmount
   ) external returns(uint256);
 
-  function updateRate(
+  function setRate(
     bytes32 positionId,
     uint128 drawnRate,
     uint128 facilityRate

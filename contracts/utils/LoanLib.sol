@@ -34,14 +34,14 @@ library LoanLib {
     }
 
     /**
-     * @notice
-     * @dev - Assumes oracles all return answers in USD with 1e8 decimals
-           - Does not check if price < 0. HAndled in Oracle or Loan
-     * @param oracle - oracle contract specified by loan getting valuation
-     * @param token - token to value on oracle
-     * @param amount - token amount
+     * @notice         - Gets total valuation for amount of tokens using given oracle. 
+     * @dev            - Assumes oracles all return answers in USD with 1e8 decimals
+                       - Does not check if price < 0. HAndled in Oracle or Loan
+     * @param oracle   - oracle contract specified by loan getting valuation
+     * @param token    - token to value on oracle
+     * @param amount   - token amount
      * @param decimals - token decimals
-     * @return total value in usd of all tokens 
+     * @return         - total value in usd of all tokens 
      */
     function getValuation(
       IOracle oracle,
@@ -52,34 +52,40 @@ library LoanLib {
       external
       returns(uint256)
     {
-      return _calculateValue(oracle.getLatestAnswer(token), token, amount, decimals);
+      return _calculateValue(oracle.getLatestAnswer(token), amount, decimals);
     }
 
+    /**
+     * @notice
+     * @dev            - Assumes oracles all return answers in USD with 1e8 decimals
+                       - Does not check if price < 0. HAndled in Oracle or Loan
+     * @param price    - oracle price of asset. 8 decimals
+     * @param amount   - amount of tokens vbeing valued.
+     * @param decimals - token decimals to remove for usd price
+     * @return         - total USD value of amount in 8 decimals 
+     */
     function calculateValue(
       int price,
-      address token,
       uint256 amount,
       uint8 decimals
     )
       internal
       returns(uint256)
     {
-      return _calculateValue(price, token, amount, decimals);
+      return _calculateValue(price, amount, decimals);
     }
 
 
       /**
-     * @notice - calculates value of tokens and denominates in USD 8
-     * @dev - Assumes all oracles return USD responses in 1e8 decimals
-     * @param price - oracle price of `token`
-     * @param token - token to value on oracle
-     * @param amount - token amount
-     * @param decimals - token decimals
-     * @return total value in usd of all tokens 
+     * @notice         - calculates value of tokens and denominates in USD 8
+     * @dev            - Assumes all oracles return USD responses in 1e8 decimals
+     * @param price    - oracle price of asset. 8 decimals
+     * @param amount   - amount of tokens vbeing valued.
+     * @param decimals - token decimals to remove for usd price
+     * @return         - total value in usd of all tokens 
      */
     function _calculateValue(
       int price,
-      address token,
       uint256 amount,
       uint8 decimals
     )
@@ -91,10 +97,10 @@ library LoanLib {
 
 
     /**
-     * @dev Create deterministic hash id for a debt position on `loan` given position details
-     * @param loan - loan that debt position exists on
+     * @dev          - Create deterministic hash id for a debt position on `loan` given position details
+     * @param loan   - loan that debt position exists on
      * @param lender - address managing debt position
-     * @param token - token that is being lent out in debt position
+     * @param token  - token that is being lent out in debt position
      * @return positionId
      */
     function computePositionId(address loan, address lender, address token) external pure returns(bytes32) {
